@@ -722,8 +722,7 @@ with st.expander("ℹ️ Descripción de los métodos de simulación disponibles
   con tendencia.
 - **CAGR (crecimiento anual compuesto):** es la tasa de crecimiento que, si
   se repitiera exactamente igual cada año, llevaría desde el primer valor
-  del histórico hasta el último — como el interés compuesto de una
-  inversión. La fórmula solo usa el primer y el último año, pero eso no
+  del histórico hasta el último. La fórmula solo usa el primer y el último año, pero eso no
   significa que ignore lo que pasó en el medio: es un atajo matemático
   equivalente a promediar el crecimiento de todos los años "encadenándolos"
   entre sí, en vez de simplemente sumarlos y dividir. Por eso, si el
