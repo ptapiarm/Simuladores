@@ -702,9 +702,10 @@ def mostrar_bloque_por_sexo(df, df_sies=None):
 # 7. EJECUCIÓN SEGÚN MODO
 # =========================================================
 if modo.startswith("General"):
-    mostrar_bloque_general(df_entrada, titulo="General", df_sies=datos_general_sies)
+    #mostrar_bloque_general(df_entrada, titulo="General", df_sies=datos_general_sies)
+    mostrar_bloque_general(df_entrada, titulo="General", df_sies=None)
 else:
-    mostrar_bloque_por_sexo(df_entrada, df_sies=datos_sexo_sies)
+    mostrar_bloque_por_sexo(df_entrada, df_sies=None)
 
 st.markdown("---")
 with st.expander("ℹ️ Descripción de los métodos de simulación disponibles"):
