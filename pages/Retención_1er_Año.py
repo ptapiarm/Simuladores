@@ -713,14 +713,16 @@ with st.expander("ℹ️ Descripción de los métodos de simulación disponibles
   defecto usa **todo el histórico**, pero puede limitarse a las últimas N
   variaciones interanuales desde la barra lateral. Recomendado para series
   con tendencia.
-- **CAGR (crecimiento anual compuesto):** aunque la fórmula solo usa el primer
-  y el último año del histórico, matemáticamente sí "contiene" el efecto de
-  todos los años intermedios: al encadenar las tasas año a año, los valores
-  intermedios se cancelan y solo quedan el inicial y el final. Por eso el
-  CAGR equivale a la **media geométrica** de las tasas interanuales (a
-  diferencia de Tendencia, que usa la media **aritmética** de esas mismas
-  tasas). Con series poco volátiles, ambos métodos suelen dar resultados muy
-  parecidos; con años más dispares entre sí, empiezan a diferenciarse más.
-  Recomendado para series con tendencia.
+- **CAGR (crecimiento anual compuesto):** es la tasa de crecimiento que, si
+  se repitiera exactamente igual cada año, llevaría desde el primer valor
+  del histórico hasta el último — como el interés compuesto de una
+  inversión. La fórmula solo usa el primer y el último año, pero eso no
+  significa que ignore lo que pasó en el medio: es un atajo matemático
+  equivalente a promediar el crecimiento de todos los años "encadenándolos"
+  entre sí, en vez de simplemente sumarlos y dividir. Por eso, si el
+  indicador subió de forma pareja, el CAGR da prácticamente lo mismo que
+  Tendencia; pero si hubo algún año con un salto raro, el CAGR le da menos
+  peso a ese sobresalto, porque en el fondo solo le importa dónde arrancaste
+  y dónde terminaste. Recomendado para series con tendencia.
         """
     )
