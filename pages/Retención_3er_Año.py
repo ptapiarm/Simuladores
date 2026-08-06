@@ -16,7 +16,7 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Simulador de Metas — UAH", layout="wide", page_icon="🎓")
 
@@ -160,73 +160,100 @@ ESCALA_Y_MIN = 50
 ESCALA_Y_MAX = 100
 
 
-def _aplicar_tema(chart, legend_columns=3, legend_label_limit=280):
-    """Aplica un tema visual consistente (tipografía, grilla, leyenda) a
-    cualquier gráfico Altair de la app."""
-    return (
-        chart
-        .configure(background="transparent")
-        .configure_axis(
-            grid=True,
-            gridColor="#dedcd3",
-            gridDash=[2, 3],
-            domain=True,
-            domainColor="#b8b6ac",
-            tickColor="#b8b6ac",
-            labelFontSize=12,
-            labelColor=COLOR_TEXTO,
-            labelFont="sans-serif",
-            titleFontSize=13,
-            titleFontWeight="normal",
-            titleColor=COLOR_TEXTO,
-            titleFont="sans-serif",
-        )
-        .configure_legend(
-            labelFontSize=12,
-            titleFontSize=12,
-            labelColor=COLOR_TEXTO,
-            titleColor=COLOR_TEXTO,
-            labelFont="sans-serif",
-            titleFont="sans-serif",
-            labelLimit=legend_label_limit,
-            orient="bottom",
-            direction="horizontal",
-            columns=legend_columns,
-            symbolType="stroke",
-            symbolStrokeWidth=3,
-            padding=8,
-            titlePadding=6,
-        )
-        .configure_view(strokeWidth=0)
+def _dash_de_vega(valor):
+    """Traduce un patrón de guiones estilo Vega ([1,0], [6,3], [2,2]) al
+    nombre de estilo de línea que usa Plotly."""
+    if valor == DASH_SOLIDO:
+        return "solid"
+    if valor == DASH_FINO:
+        return "dot"
+    return "dash"  # DASH_MEDIO y cualquier otro caso
+
+
+PLOTLY_LEGEND = dict(
+    orientation="h",
+    yanchor="top", y=-0.25,
+    xanchor="center", x=0.5,
+    font=dict(size=12),
+    groupclick="togglegroup",  # un clic activa/desactiva todos los tramos de esa curva a la vez
+)
+PLOTLY_XAXIS = dict(
+    title="Cohorte", type="category", tickangle=0,
+    showgrid=False, linecolor="#b8b6ac", tickfont=dict(size=12),
+)
+PLOTLY_YAXIS = dict(
+    title="% de retención", range=[ESCALA_Y_MIN, ESCALA_Y_MAX],
+    gridcolor="#dedcd3", griddash="dot", linecolor="#b8b6ac", tickfont=dict(size=12),
+)
+
+
+def _layout_base(height, width):
+    return dict(
+        height=height,
+        width=width,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="sans-serif", size=12, color=COLOR_TEXTO),
+        margin=dict(t=20, b=10, l=10, r=10),
+        legend=PLOTLY_LEGEND,
+        xaxis=PLOTLY_XAXIS,
+        yaxis=PLOTLY_YAXIS,
+        hovermode="x unified",
     )
 
 
-def grafico_lineas(df_wide, colores, height=400, width=560, legend_columns=3, legend_label_limit=280):
-    """Dibuja un gráfico de líneas (Altair) a partir de un DataFrame ancho
+def grafico_lineas(df_wide, colores, height=400, width=560, **_ignorado):
+    """Dibuja un gráfico de líneas (Plotly) a partir de un DataFrame ancho
     (índice = Cohorte, una columna por serie), con el eje Y fijo entre
     ESCALA_Y_MIN y ESCALA_Y_MAX, puntos marcados en cada año y los colores
-    indicados en el mismo orden que las columnas. `legend_columns` y
-    `legend_label_limit` permiten dar más espacio a la leyenda cuando hay
-    muchas series con nombres largos (por ejemplo, al comparar métodos)."""
-    cols = list(df_wide.columns)
-    df_long = df_wide.reset_index().melt(id_vars="Cohorte", value_vars=cols, var_name="Serie", value_name="__valor__")
-    base = alt.Chart(df_long).encode(
-        x=alt.X("Cohorte:O", title="Cohorte", axis=alt.Axis(grid=False, labelAngle=0)),
-        y=alt.Y(
-            "__valor__:Q", title="% de retención",
-            scale=alt.Scale(domain=[ESCALA_Y_MIN, ESCALA_Y_MAX]),
-            axis=alt.Axis(grid=True),
-        ),
-        color=alt.Color("Serie:N", title="Serie", scale=alt.Scale(domain=cols, range=colores)),
-        tooltip=["Serie", "Cohorte", alt.Tooltip("__valor__:Q", title="% de retención", format=".1f")],
-    )
-    lineas = base.mark_line(strokeWidth=3, interpolate="monotone", strokeCap="round", strokeJoin="round")
-    puntos = base.mark_point(size=55, filled=True, opacity=1)
-    chart = (lineas + puntos).properties(height=height, width=width)
-    st.altair_chart(
-        _aplicar_tema(chart, legend_columns=legend_columns, legend_label_limit=legend_label_limit),
-        use_container_width=False,
-    )
+    indicados en el mismo orden que las columnas. Cada curva se puede
+    activar/desactivar haciendo clic en su nombre en la leyenda."""
+    fig = go.Figure()
+    x_vals = [str(a) for a in df_wide.index]
+    for col, color in zip(df_wide.columns, colores):
+        fig.add_trace(go.Scatter(
+            x=x_vals, y=df_wide[col],
+            mode="lines+markers",
+            name=col,
+            line=dict(color=color, width=3),
+            marker=dict(size=8, color=color),
+            connectgaps=True,
+            hovertemplate="%{fullData.name}: %{y:.1f}%<extra></extra>",
+        ))
+    fig.update_layout(**_layout_base(height, width))
+    st.plotly_chart(fig, use_container_width=False)
+
+
+def grafico_proyeccion_sexo(df_grafico, color_domain, color_range, dash_domain, dash_range, height=430, width=760):
+    """Dibuja el gráfico único de proyección por sexo (Plotly), con líneas
+    punteadas para la parte proyectada y sólidas para la histórica. Cada
+    curva (agrupada por 'Grupo') se activa/desactiva en conjunto al hacer
+    clic en la leyenda, aunque esté compuesta por varios tramos (histórico +
+    proyección)."""
+    color_map = dict(zip(color_domain, color_range))
+    dash_map = {k: _dash_de_vega(v) for k, v in zip(dash_domain, dash_range)}
+    fig = go.Figure()
+    orden_grupos = list(dict.fromkeys(df_grafico["Grupo"]))
+    for grupo in orden_grupos:
+        sub_grupo = df_grafico[df_grafico["Grupo"] == grupo]
+        color = color_map.get(grupo, COLOR_TEXTO)
+        primero = True
+        for dashkey in dict.fromkeys(sub_grupo["DashKey"]):
+            tramo = sub_grupo[sub_grupo["DashKey"] == dashkey].sort_values("Cohorte")
+            fig.add_trace(go.Scatter(
+                x=[str(a) for a in tramo["Cohorte"]],
+                y=tramo["% de retención"],
+                mode="lines+markers",
+                name=grupo,
+                legendgroup=grupo,
+                showlegend=primero,
+                line=dict(color=color, width=2.6, dash=dash_map.get(dashkey, "solid")),
+                marker=dict(size=7, color=color),
+                hovertemplate=f"{grupo} ({dashkey})" + ": %{y:.1f}%<extra></extra>",
+            ))
+            primero = False
+    fig.update_layout(**_layout_base(height, width))
+    st.plotly_chart(fig, use_container_width=False)
 
 
 # =========================================================
@@ -401,7 +428,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
     st.subheader(f"🔮 Proyección — {titulo}")
 
     if comparar_todos:
-        df_comp = pd.DataFrame({"Cohorte": anios, "Historico": valores})
+        df_comp = pd.DataFrame({"Cohorte": anios, "Histórico UAH": valores})
         if df_sies is not None:
             df_comp = pd.merge(
                 df_comp, df_sies.rename(columns={"% de retención": NOMBRE_SIES}), on="Cohorte", how="outer"
@@ -430,7 +457,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             except Exception as e:
                 notas.append(f"- **{nombre}**: no se pudo calcular ({e})")
         df_comp = df_comp.sort_values("Cohorte").reset_index(drop=True)
-        orden_cols = ["Historico"]
+        orden_cols = ["Histórico UAH"]
         colores_cols = [COLOR_TEXTO]
         if df_sies is not None:
             orden_cols += [NOMBRE_SIES]
@@ -445,14 +472,11 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             col: st.column_config.NumberColumn(col, format="%.1f%%")
             for col in df_comp.columns if col != "Cohorte"
         }
-        col_tabla2, col_grafico2 = st.columns([1, 2])
-        with col_tabla2:
-            st.dataframe(df_comp, use_container_width=False, hide_index=True, column_config=col_config)
-        with col_grafico2:
-            grafico_lineas(
-                df_comp.set_index("Cohorte"), colores=colores_cols,
-                width=760, legend_columns=2, legend_label_limit=320,
-            )
+        st.dataframe(df_comp, use_container_width=False, hide_index=True, column_config=col_config)
+        grafico_lineas(
+            df_comp.set_index("Cohorte"), colores=colores_cols,
+            width=760, legend_columns=2, legend_label_limit=320,
+        )
         st.markdown("**Notas de cada método:**")
         st.markdown("\n".join(notas))
 
@@ -481,15 +505,15 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         df_proy = pd.DataFrame({"Cohorte": anios_f, "% de retención proyectada": vals_f})
         st.info(nota)
 
-        df_hist_plot = df.rename(columns={"% de retención": "Histórico"})
+        df_hist_plot = df.rename(columns={"% de retención": "Histórico UAH"})
         df_proy_plot = df_proy.rename(columns={"% de retención proyectada": "Proyección"})
         df_final = pd.merge(
-            df_hist_plot[["Cohorte", "Histórico"]],
+            df_hist_plot[["Cohorte", "Histórico UAH"]],
             df_proy_plot.rename(columns={"Cohorte": "Cohorte"})[["Cohorte", "Proyección"]],
             on="Cohorte",
             how="outer",
         ).sort_values("Cohorte")
-        columnas_chart = ["Histórico", "Proyección"]
+        columnas_chart = ["Histórico UAH", "Proyección"]
         colores_chart = [COLOR_TEXTO, COLOR_ACENTO]
         if df_sies is not None:
             df_final = pd.merge(
@@ -577,7 +601,7 @@ def mostrar_bloque_por_sexo(df, df_sies=None):
             valores = df_sexo["% de retención"].tolist()
 
             for a, v in zip(anios, valores):
-                registros.append({"Cohorte": a, "% de retención": v, "Grupo": f"Histórico - {sexo}", "DashKey": "Histórico"})
+                registros.append({"Cohorte": a, "% de retención": v, "Grupo": f"Histórico UAH - {sexo}", "DashKey": "Histórico"})
 
             for i, (nombre, key) in enumerate(METODOS.items()):
                 try:
@@ -600,7 +624,7 @@ def mostrar_bloque_por_sexo(df, df_sies=None):
                 except Exception as e:
                     notas.append(f"- **{sexo} — {nombre}**: no se pudo calcular ({e})")
 
-        color_domain = [f"Histórico - {s}" for s in sexos] + list(METODOS.keys())
+        color_domain = [f"Histórico UAH - {s}" for s in sexos] + list(METODOS.keys())
         color_range = ([COLOR_ACENTO, COLOR_TEXTO][: len(sexos)]) + PALETA_METODOS_SEXO[: len(METODOS)]
         dash_domain = ["Histórico"] + [f"Proyección - {s}" for s in sexos]
         dash_range = [DASH_SOLIDO, DASH_MEDIO, DASH_FINO][: len(dash_domain)]
@@ -646,26 +670,9 @@ def mostrar_bloque_por_sexo(df, df_sies=None):
             color_range.append(colores_sies_sexo.get(sexo, COLOR_SIES))
 
     df_grafico = pd.DataFrame(registros)
-    base = alt.Chart(df_grafico).encode(
-        x=alt.X("Cohorte:O", title="Cohorte", axis=alt.Axis(grid=False, labelAngle=0)),
-        y=alt.Y(
-            "% de retención:Q", title="% de retención",
-            scale=alt.Scale(domain=[ESCALA_Y_MIN, ESCALA_Y_MAX]),
-            axis=alt.Axis(grid=True),
-        ),
-        color=alt.Color("Grupo:N", title="Serie", scale=alt.Scale(domain=color_domain, range=color_range)),
-        tooltip=["Grupo", "Cohorte", alt.Tooltip("% de retención:Q", format=".1f")],
-    )
-    lineas = base.mark_line(strokeWidth=2.6, interpolate="monotone", strokeCap="round", strokeJoin="round").encode(
-        strokeDash=alt.StrokeDash(
-            "DashKey:N", title="Tipo", scale=alt.Scale(domain=dash_domain, range=dash_range)
-        ),
-    )
-    puntos = base.mark_point(size=45, filled=True, opacity=0.95)
-    chart = (lineas + puntos).properties(height=430, width=760)
-    st.altair_chart(
-        _aplicar_tema(chart, legend_columns=2, legend_label_limit=320),
-        use_container_width=False,
+    grafico_proyeccion_sexo(
+        df_grafico, color_domain=color_domain, color_range=color_range,
+        dash_domain=dash_domain, dash_range=dash_range, height=430, width=760,
     )
 
     st.markdown("**Notas de la proyección:**")
@@ -716,9 +723,13 @@ with st.expander("ℹ️ Descripción de los métodos de simulación disponibles
 - **CAGR (crecimiento anual compuesto):** es la tasa de crecimiento que, si
   se repitiera exactamente igual cada año, llevaría desde el primer valor
   del histórico hasta el último — como el interés compuesto de una
-  inversión. Si el indicador subió de forma pareja, el CAGR da prácticamente lo mismo que
+  inversión. La fórmula solo usa el primer y el último año, pero eso no
+  significa que ignore lo que pasó en el medio: es un atajo matemático
+  equivalente a promediar el crecimiento de todos los años "encadenándolos"
+  entre sí, en vez de simplemente sumarlos y dividir. Por eso, si el
+  indicador subió de forma pareja, el CAGR da prácticamente lo mismo que
   Tendencia; pero si hubo algún año con un salto raro, el CAGR le da menos
-  peso a ese sobresalto, porque en el fondo solo le importa dónde se empezó 
-  y cómo terminó. Recomendado para series con tendencia.
+  peso a ese sobresalto, porque en el fondo solo le importa dónde arrancaste
+  y dónde terminaste. Recomendado para series con tendencia.
         """
     )
