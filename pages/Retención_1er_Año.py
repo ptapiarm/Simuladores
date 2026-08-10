@@ -141,13 +141,18 @@ NOMBRE_SIES = "Universidades-Datos Sies"
 ANIOS_SIES = [2021, 2022, 2023, 2024]
 
 # En modo General, la referencia SIES viene en 5 series: Promedio, Mínimo,
-# Máximo y Quintil 4 del sistema universitario completo, más la curva de
+# Máximo y Quintil4 del sistema universitario completo, más la curva de
 # universidades con 5 años de acreditación.
 NOMBRE_SIES_PROMEDIO = "Promedio Universidades (SIES)"
 NOMBRE_SIES_MIN = "Mínimo Universidades (SIES)"
 NOMBRE_SIES_MAX = "Máximo Universidades (SIES)"
-NOMBRE_SIES_Q4 = "Quintil 4 Universidades (SIES)"
+NOMBRE_SIES_Q4 = "Quintil4 Universidades (SIES)"
 NOMBRE_SIES_5 = "Universidades 5 años de acreditación"
+
+NOTA_SIES_GENERAL = (
+    "Promedio, Mínimo, Máximo y Quintil4 corresponden a datos obtenidos de "
+    "Universidades con 6 años de acreditación."
+)
 
 datos_general_sies = pd.DataFrame({
     "Cohorte": ANIOS_SIES,
@@ -438,6 +443,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
                     df_hist_sies.set_index("Cohorte")[["% de retención"] + columnas_sies],
                     colores=[COLOR_ACENTO] + colores_sies,
                 )
+                st.caption(NOTA_SIES_GENERAL)
             else:
                 grafico_lineas(df.set_index("Cohorte")[["% de retención"]], colores=[COLOR_ACENTO])
 
@@ -496,6 +502,8 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             df_comp.set_index("Cohorte"), colores=colores_cols,
             width=760, legend_columns=2, legend_label_limit=320,
         )
+        if columnas_sies:
+            st.caption(NOTA_SIES_GENERAL)
         st.markdown("**Notas de cada método:**")
         st.markdown("\n".join(notas))
 
@@ -540,6 +548,8 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             columnas_chart += columnas_sies
             colores_chart += COLORES_SIES_GENERAL[: len(columnas_sies)]
         grafico_lineas(df_final.set_index("Cohorte")[columnas_chart], colores=colores_chart)
+        if df_sies is not None:
+            st.caption(NOTA_SIES_GENERAL)
 
         st.markdown("#### 📋 Tabla resumen — valor proyectado por cohorte")
         st.dataframe(
