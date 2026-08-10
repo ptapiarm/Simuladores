@@ -125,29 +125,36 @@ ANIOS_HIST = [2021, 2022, 2023, 2024, 2025]
 # Modo GENERAL (sin separar por sexo)
 datos_general = pd.DataFrame({
     "Cohorte": ANIOS_HIST,
-    "% de retención": [82, 82, 81, 80, 84],
+    "% de retención": [83, 82, 83, 82, 85],
 })
 
 # Modo POR SEXO
 datos_sexo = pd.DataFrame({
     "Cohorte": ANIOS_HIST * 2,
     "Sexo": ["Mujer"] * 5 + ["Hombre"] * 5,
-    "% de retención": [84, 83, 83, 82, 86,   # Hombres
-              80, 80, 79, 78, 82],  # Mujeres
+    "% de retención": [80, 79, 81, 80, 83,   # Hombres
+              84, 83, 84, 84, 86],  # Mujeres
 })
 
 # Curva de comparación / referencia — sistema universitario completo (Datos SIES)
 NOMBRE_SIES = "Universidades-Datos Sies"
 ANIOS_SIES = [2021, 2022, 2023, 2024]
 
-# En modo General, la referencia SIES viene en 2 series: universidades con
-# 6 años de acreditación y universidades con 5 años de acreditación.
-NOMBRE_SIES_6 = "Universidades 6 años de acreditación"
+# En modo General, la referencia SIES viene en 5 series: Promedio, Mínimo,
+# Máximo y Quintil 4 del sistema universitario completo, más la curva de
+# universidades con 5 años de acreditación.
+NOMBRE_SIES_PROMEDIO = "Promedio Universidades (SIES)"
+NOMBRE_SIES_MIN = "Mínimo Universidades (SIES)"
+NOMBRE_SIES_MAX = "Máximo Universidades (SIES)"
+NOMBRE_SIES_Q4 = "Quintil 4 Universidades (SIES)"
 NOMBRE_SIES_5 = "Universidades 5 años de acreditación"
 
 datos_general_sies = pd.DataFrame({
     "Cohorte": ANIOS_SIES,
-    NOMBRE_SIES_6: [85.4, 83.5, 84.4, 85.7],
+    NOMBRE_SIES_PROMEDIO: [85.4, 83.5, 84.4, 85.7],
+    NOMBRE_SIES_MIN: [80.8, 76.0, 76.6, 80.6],
+    NOMBRE_SIES_MAX: [90.4, 89.3, 90.4, 91.3],
+    NOMBRE_SIES_Q4: [87.8, 88.0, 87.3, 89.8],
     NOMBRE_SIES_5: [82.7, 80.8, 81.8, 82.8],
 })
 
@@ -401,8 +408,14 @@ df_entrada = datos_general if modo.startswith("General") else datos_sexo
 # 5. MODO GENERAL
 # =========================================================
 COLOR_SIES = "#8c8c8c"
-COLOR_SIES_6 = "#8c8c8c"
-COLOR_SIES_5 = "#c9c9c9"
+COLOR_SIES_PROMEDIO = "#8c8c8c"
+COLOR_SIES_MIN = "#d9d9d9"
+COLOR_SIES_MAX = "#595959"
+COLOR_SIES_Q4 = "#b3b3b3"
+COLOR_SIES_5 = "#3d3d3d"
+# Orden y colores de las 5 curvas de referencia SIES, en el mismo orden que
+# aparecen las columnas en `datos_general_sies` (todas menos "Cohorte").
+COLORES_SIES_GENERAL = [COLOR_SIES_PROMEDIO, COLOR_SIES_MIN, COLOR_SIES_MAX, COLOR_SIES_Q4, COLOR_SIES_5]
 
 
 def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True, df_sies=None):
@@ -420,7 +433,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             if df_sies is not None:
                 df_hist_sies = pd.merge(df, df_sies, on="Cohorte", how="outer").sort_values("Cohorte")
                 columnas_sies = [c for c in df_sies.columns if c != "Cohorte"]
-                colores_sies = [COLOR_SIES_6, COLOR_SIES_5][: len(columnas_sies)]
+                colores_sies = COLORES_SIES_GENERAL[: len(columnas_sies)]
                 grafico_lineas(
                     df_hist_sies.set_index("Cohorte")[["% de retención"] + columnas_sies],
                     colores=[COLOR_ACENTO] + colores_sies,
@@ -467,7 +480,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         colores_cols = [COLOR_TEXTO]
         if columnas_sies:
             orden_cols += columnas_sies
-            colores_cols += [COLOR_SIES_6, COLOR_SIES_5][: len(columnas_sies)]
+            colores_cols += COLORES_SIES_GENERAL[: len(columnas_sies)]
         metodos_presentes = [n for n in METODOS.keys() if n in df_comp.columns]
         orden_cols += metodos_presentes
         # Se evita el gris (#8c8c8c), reservado para la curva SIES, en los colores de método.
@@ -525,7 +538,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             columnas_sies = [c for c in df_sies.columns if c != "Cohorte"]
             df_final = pd.merge(df_final, df_sies, on="Cohorte", how="outer").sort_values("Cohorte")
             columnas_chart += columnas_sies
-            colores_chart += [COLOR_SIES_6, COLOR_SIES_5][: len(columnas_sies)]
+            colores_chart += COLORES_SIES_GENERAL[: len(columnas_sies)]
         grafico_lineas(df_final.set_index("Cohorte")[columnas_chart], colores=colores_chart)
 
         st.markdown("#### 📋 Tabla resumen — valor proyectado por cohorte")
