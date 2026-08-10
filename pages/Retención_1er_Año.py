@@ -292,13 +292,31 @@ def proyeccion_promedio_movil(valores, anios, n_futuro, ventana=3):
 
 
 def proyeccion_regresion_lineal(valores, anios, n_futuro):
-    """Ajusta una regresión lineal (mínimos cuadrados) y proyecta."""
+    """Opción 1: Ajuste global (mínimos cuadrados).
+    La recta se calcula para representar lo mejor posible TODOS los años del
+    histórico en conjunto. No necesariamente pasa por el último valor real."""
     x = np.array(anios)
     y = np.array(valores)
     coef = np.polyfit(x, y, 1)  # pendiente, intercepto
     modelo = np.poly1d(coef)
     anios_futuros = [anios[-1] + i for i in range(1, n_futuro + 1)]
     resultado = [modelo(a) for a in anios_futuros]
+    return anios_futuros, resultado
+
+
+def proyeccion_regresion_lineal_anclada(valores, anios, n_futuro):
+    """Opción 2: Ajuste anclado al último año real.
+    Usa la misma pendiente (tasa de cambio promedio) que calcula la regresión
+    con todo el histórico, pero la proyección arranca exactamente desde el
+    último valor real, sin salto, y sube (o baja) de forma constante según
+    esa pendiente."""
+    x = np.array(anios)
+    y = np.array(valores)
+    coef = np.polyfit(x, y, 1)  # pendiente, intercepto
+    pendiente = coef[0]
+    anios_futuros = [anios[-1] + i for i in range(1, n_futuro + 1)]
+    ultimo_valor = valores[-1]
+    resultado = [ultimo_valor + pendiente * i for i in range(1, n_futuro + 1)]
     return anios_futuros, resultado
 
 
@@ -336,7 +354,8 @@ def proyeccion_cagr(valores, anios, n_futuro):
 
 METODOS = {
     "Promedio móvil (últimos 3 años)": "pm3",
-    "Regresión lineal": "reg",
+    "Regresión lineal (ajuste global)": "reg",
+    "Regresión lineal (anclada al último año)": "reg_anclada",
     "Tendencia (% de crecimiento promedio)": "tend",
     "CAGR (crecimiento anual compuesto)": "cagr",
 }
@@ -348,7 +367,10 @@ def calcular_proyeccion(metodo_key, valores, anios, n_futuro, ventana=3, ventana
         nota = f"Promedio móvil con ventana de {ventana} años."
     elif metodo_key == "reg":
         anios_f, vals_f = proyeccion_regresion_lineal(valores, anios, n_futuro)
-        nota = "Ajuste por regresión lineal (mínimos cuadrados)."
+        nota = "Ajuste por regresión lineal (mínimos cuadrados) sobre todo el histórico."
+    elif metodo_key == "reg_anclada":
+        anios_f, vals_f = proyeccion_regresion_lineal_anclada(valores, anios, n_futuro)
+        nota = "Regresión lineal anclada al último valor real, proyectada con la pendiente del histórico."
     elif metodo_key == "tend":
         anios_f, vals_f, tasa = proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tend)
         alcance = f"últimas {ventana_tend} tasas interanuales" if ventana_tend else "todas las tasas interanuales del histórico"
