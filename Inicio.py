@@ -94,6 +94,10 @@ st.markdown(
         padding: 1.4rem 1.6rem;
         border: 1px solid #ddd9cd;
         height: 100%;
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
     }}
     .uah-card-title {{
         margin-top: 0;
@@ -153,9 +157,9 @@ Usa el **menú de la izquierda** para navegar entre las páginas disponibles.
 
 st.markdown("### Herramientas disponibles")
 
-col1, col2, col3 = st.columns(3)
+fila1_col1, fila1_col2 = st.columns(2)
 
-with col1:
+with fila1_col1:
     st.markdown(
         """
         <div class="uah-card uah-card-accent">
@@ -168,7 +172,7 @@ with col1:
         unsafe_allow_html=True,
     )
 
-with col2:
+with fila1_col2:
     st.markdown(
         """
         <div class="uah-card uah-card-accent">
@@ -182,7 +186,10 @@ with col2:
         unsafe_allow_html=True,
     )
 
-with col3:
+st.markdown("<div style='height: 1.2rem;'></div>", unsafe_allow_html=True)
+fila2_col1, fila2_col2 = st.columns(2)
+
+with fila2_col1:
     st.markdown(
         """
         <div class="uah-card uah-card-accent">
@@ -190,6 +197,19 @@ with col3:
             <p>Proyecta el cumplimiento de metas de Titulación Oportuna a
             futuro, en modo General o desagregado por sexo, comparando
             distintos métodos de simulación.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with fila2_col2:
+    st.markdown(
+        """
+        <div class="uah-card uah-card-accent">
+            <div class="uah-card-title">🤝 Articulación con Obras</div>
+            <p>Proyecta el cumplimiento de metas de Iniciativas,
+            Instituciones y Participación UAH a futuro, definiendo tú
+            mismo la meta de cada ítem para un año objetivo.</p>
         </div>
         """,
         unsafe_allow_html=True,
