@@ -9,6 +9,7 @@ Datos reales incluidos (% de titulación por cohorte, 2015-2020).
 """
 
 import base64
+import io
 from pathlib import Path
 
 import streamlit as st
@@ -17,6 +18,20 @@ import numpy as np
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Simulador de Metas — UAH", layout="wide", page_icon="🎓")
+
+
+def _descargar_excel(df, nombre_archivo, etiqueta="⬇️ Descargar tabla (Excel)"):
+    """Genera un archivo .xlsx en memoria a partir de un DataFrame y
+    muestra el botón de descarga en Streamlit (en vez de CSV)."""
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Proyección")
+    st.download_button(
+        etiqueta,
+        data=buffer.getvalue(),
+        file_name=nombre_archivo,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # =========================================================
 # 0. TEMA INSTITUCIONAL (colores UAH) Y ENCABEZADO CON LOGO
@@ -244,8 +259,6 @@ def proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tasas=None
 
 
 METODOS = {
-    "Promedio móvil (últimos 3 años)": "pm3",
-    "Regresión lineal (ajuste global)": "reg",
     "Regresión lineal (anclada al último año)": "reg_anclada",
     "Tendencia (% de crecimiento promedio)": "tend",
     "Meta personalizada": "meta",
@@ -321,9 +334,7 @@ st.sidebar.caption(
 
 comparar_todos = st.sidebar.checkbox("Comparar todos los métodos a la vez", value=False)
 
-ventana = 3
-if metodo_key == "pm3" or comparar_todos:
-    ventana = st.sidebar.slider("Ventana del promedio móvil (años)", 2, 5, 3)
+ventana = 3  # ya no configurable: Promedio móvil ya no se ofrece como método
 
 ventana_tend = None
 if metodo_key == "tend" or comparar_todos:
@@ -539,12 +550,10 @@ if comparar_todos:
         }
         st.dataframe(df_futuro, use_container_width=False, hide_index=True, column_config=col_config_futuro)
 
-        csv = df_futuro.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Descargar tabla de proyecciones (CSV)",
-            data=csv,
-            file_name=f"proyeccion_comparacion_titulacion_{titulo_modo.lower()}.csv",
-            mime="text/csv",
+        _descargar_excel(
+            df_futuro,
+            f"proyeccion_comparacion_titulacion_{titulo_modo.lower()}.xlsx",
+            "⬇️ Descargar tabla de proyecciones (Excel)",
         )
 else:
     if metodo_key == "manual" and titulo_modo == "General":
@@ -591,18 +600,17 @@ else:
         },
     )
 
-    csv = pd.concat(
+    df_descarga = pd.concat(
         [
             df_entrada.assign(Tipo="Histórico"),
             df_proy.rename(columns={"% de titulación proyectada": "% de titulación"}).assign(Tipo="Proyección"),
         ],
         ignore_index=True,
-    ).to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Descargar histórico + proyección (CSV)",
-        data=csv,
-        file_name=f"proyeccion_titulacion_{titulo_modo.lower()}.csv",
-        mime="text/csv",
+    )
+    _descargar_excel(
+        df_descarga,
+        f"proyeccion_titulacion_{titulo_modo.lower()}.xlsx",
+        "⬇️ Descargar histórico + proyección (Excel)",
     )
 
 st.markdown("---")

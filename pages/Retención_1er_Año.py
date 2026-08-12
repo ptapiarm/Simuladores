@@ -11,6 +11,7 @@ No requiere carga de archivos: los datos viven fijos en este script.
 """
 
 import base64
+import io
 from pathlib import Path
 
 import streamlit as st
@@ -19,6 +20,20 @@ import numpy as np
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Simulador de Metas — UAH", layout="wide", page_icon="🎓")
+
+
+def _descargar_excel(df, nombre_archivo, etiqueta="⬇️ Descargar tabla (Excel)"):
+    """Genera un archivo .xlsx en memoria a partir de un DataFrame y
+    muestra el botón de descarga en Streamlit (en vez de CSV)."""
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Proyección")
+    st.download_button(
+        etiqueta,
+        data=buffer.getvalue(),
+        file_name=nombre_archivo,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # =========================================================
 # 0. TEMA INSTITUCIONAL (colores UAH) Y ENCABEZADO CON LOGO
@@ -140,25 +155,19 @@ datos_sexo = pd.DataFrame({
 NOMBRE_SIES = "Universidades-Datos Sies"
 ANIOS_SIES = [2021, 2022, 2023, 2024]
 
-# En modo General, la referencia SIES viene en 5 series: Promedio, Mínimo,
-# Máximo y Quintil4 del sistema universitario completo, más la curva de
-# universidades con 5 años de acreditación.
-NOMBRE_SIES_PROMEDIO = "Promedio Universidades (SIES)"
-NOMBRE_SIES_MIN = "Mínimo Universidades (SIES)"
-NOMBRE_SIES_MAX = "Máximo Universidades (SIES)"
+# En modo General, la referencia SIES viene en 2 series: Quintil4 del
+# sistema universitario completo, más la curva de universidades con 5 años
+# de acreditación.
 NOMBRE_SIES_Q4 = "Quintil4 Universidades (SIES)"
 NOMBRE_SIES_5 = "Universidades 5 años de acreditación"
 
 NOTA_SIES_GENERAL = (
-    "Promedio, Mínimo, Máximo y Quintil4 corresponden a datos obtenidos de "
-    "Universidades con 6 años de acreditación."
+    "Quintil4 corresponde a datos obtenidos de Universidades con 6 años "
+    "de acreditación."
 )
 
 datos_general_sies = pd.DataFrame({
     "Cohorte": ANIOS_SIES,
-    NOMBRE_SIES_PROMEDIO: [85.4, 83.5, 84.4, 85.7],
-    NOMBRE_SIES_MIN: [80.8, 76.0, 76.6, 80.6],
-    NOMBRE_SIES_MAX: [90.4, 89.3, 90.4, 91.3],
     NOMBRE_SIES_Q4: [87.8, 88.0, 87.3, 89.8],
     NOMBRE_SIES_5: [82.7, 80.8, 81.8, 82.8],
 })
@@ -317,8 +326,6 @@ def proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tasas=None
 
 
 METODOS = {
-    "Promedio móvil (últimos 3 años)": "pm3",
-    "Regresión lineal (ajuste global)": "reg",
     "Regresión lineal (anclada al último año)": "reg_anclada",
     "Tendencia (% de crecimiento promedio)": "tend",
     "Meta: alcanzar Quintil4 (SIES)": "meta_q4",
@@ -394,9 +401,7 @@ st.sidebar.caption(
 
 comparar_todos = st.sidebar.checkbox("Comparar todos los métodos a la vez", value=False)
 
-ventana = 3
-if metodo_key == "pm3" or comparar_todos:
-    ventana = st.sidebar.slider("Ventana del promedio móvil (años)", 2, 5, 3)
+ventana = 3  # ya no configurable: Promedio móvil ya no se ofrece como método
 
 ventana_tend = None
 if metodo_key == "tend" or comparar_todos:
@@ -458,14 +463,11 @@ else:
 # 5. MODO GENERAL
 # =========================================================
 COLOR_SIES = "#8c8c8c"
-COLOR_SIES_PROMEDIO = "#8c8c8c"
-COLOR_SIES_MIN = "#d9d9d9"
-COLOR_SIES_MAX = "#595959"
 COLOR_SIES_Q4 = "#b3b3b3"
 COLOR_SIES_5 = "#3d3d3d"
-# Orden y colores de las 5 curvas de referencia SIES, en el mismo orden que
+# Orden y colores de las 2 curvas de referencia SIES, en el mismo orden que
 # aparecen las columnas en `datos_general_sies` (todas menos "Cohorte").
-COLORES_SIES_GENERAL = [COLOR_SIES_PROMEDIO, COLOR_SIES_MIN, COLOR_SIES_MAX, COLOR_SIES_Q4, COLOR_SIES_5]
+COLORES_SIES_GENERAL = [COLOR_SIES_Q4, COLOR_SIES_5]
 
 
 def _widget_manual_general(anios, valores, n_futuro, key_suffix=""):
@@ -674,12 +676,10 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             }
             st.dataframe(df_futuro, use_container_width=False, hide_index=True, column_config=col_config_futuro)
 
-            csv = df_futuro.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "⬇️ Descargar tabla de proyecciones (CSV)",
-                data=csv,
-                file_name=f"proyeccion_comparacion_{titulo.lower().replace(' ', '_')}.csv",
-                mime="text/csv",
+            _descargar_excel(
+                df_futuro,
+                f"proyeccion_comparacion_{titulo.lower().replace(' ', '_')}.xlsx",
+                "⬇️ Descargar tabla de proyecciones (Excel)",
             )
     else:
         datos_manual_incompletos = False
@@ -739,7 +739,7 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             #     series_ocultas_chart = [c for c in columnas_sies if c not in activas_por_defecto]
             colores_sies_dict = dict(zip(columnas_sies, COLORES_SIES_GENERAL[: len(columnas_sies)]))
             columnas_sies_activas = (
-                [NOMBRE_SIES_MAX] if NOMBRE_SIES_Q4 in columnas_sies else columnas_sies
+                [NOMBRE_SIES_Q4] if NOMBRE_SIES_Q4 in columnas_sies else columnas_sies
             )
             columnas_chart += columnas_sies_activas
             colores_chart += [colores_sies_dict[c] for c in columnas_sies_activas]
@@ -760,15 +760,14 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             },
         )
 
-        csv = pd.concat(
+        df_descarga = pd.concat(
             [df.assign(Tipo="Histórico"), df_proy.rename(columns={"% de retención proyectada": "% de retención"}).assign(Tipo="Proyección")],
             ignore_index=True,
-        ).to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Descargar histórico + proyección (CSV)",
-            data=csv,
-            file_name=f"proyeccion_{titulo.lower().replace(' ', '_')}.csv",
-            mime="text/csv",
+        )
+        _descargar_excel(
+            df_descarga,
+            f"proyeccion_{titulo.lower().replace(' ', '_')}.xlsx",
+            "⬇️ Descargar histórico + proyección (Excel)",
         )
 
 
