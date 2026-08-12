@@ -30,7 +30,7 @@ COLOR_BLANCO = "#ffffff"
 
 # Paleta extendida para gráficos con varias series (tonos derivados del negro
 # y el naranja institucional, para mantenerse dentro de la misma identidad).
-PALETA_METODOS = ["#000000", "#ff6f43", "#8c8c8c", "#c9542b", "#4d4d4d", "#ffb08c"]
+PALETA_METODOS = ["#000000", "#ff6f43", "#8c8c8c", "#c9542b", "#4d4d4d", "#ffb08c", "#2b6f77"]
 
 st.markdown(
     f"""
@@ -125,15 +125,15 @@ ANIOS_HIST = [2021, 2022, 2023, 2024, 2025]
 # Modo GENERAL (sin separar por sexo)
 datos_general = pd.DataFrame({
     "Cohorte": ANIOS_HIST,
-    "% de retención": [83, 82, 83, 82, 85],
+    "% de retención": [82.8, 81.6, 82.8, 82, 84.7],
 })
 
 # Modo POR SEXO
 datos_sexo = pd.DataFrame({
     "Cohorte": ANIOS_HIST * 2,
-    "Sexo": ["Mujer"] * 5 + ["Hombre"] * 5,
-    "% de retención": [80, 79, 81, 80, 83,   # Hombres
-              84, 83, 84, 84, 86],  # Mujeres
+    "Sexo": ["Hombre"] * 5 + ["Mujer"] * 5,
+    "% de retención": [80.4, 79.5, 80.8, 79.9, 82.6,   # Hombres
+              84, 82.7, 84.3, 83.6, 86.2],  # Mujeres
 })
 
 # Curva de comparación / referencia — sistema universitario completo (Datos SIES)
@@ -163,6 +163,10 @@ datos_general_sies = pd.DataFrame({
     NOMBRE_SIES_5: [82.7, 80.8, 81.8, 82.8],
 })
 
+# Último valor real conocido de Quintil4 (SIES) — se usa como "meta" para la
+# proyección que apunta a alcanzar ese valor.
+VALOR_META_Q4 = float(datos_general_sies[NOMBRE_SIES_Q4].iloc[-1])
+
 datos_sexo_sies = pd.DataFrame({
     "Cohorte": ANIOS_SIES * 2,
     "Sexo": ["Mujer"] * 4 + ["Hombre"] * 4,
@@ -176,16 +180,6 @@ datos_sexo_sies = pd.DataFrame({
 # =========================================================
 ESCALA_Y_MIN = 50
 ESCALA_Y_MAX = 100
-
-
-def _dash_de_vega(valor):
-    """Traduce un patrón de guiones estilo Vega ([1,0], [6,3], [2,2]) al
-    nombre de estilo de línea que usa Plotly."""
-    if valor == DASH_SOLIDO:
-        return "solid"
-    if valor == DASH_FINO:
-        return "dot"
-    return "dash"  # DASH_MEDIO y cualquier otro caso
 
 
 PLOTLY_LEGEND = dict(
@@ -220,12 +214,16 @@ def _layout_base(height, width):
     )
 
 
-def grafico_lineas(df_wide, colores, height=400, width=560, **_ignorado):
+def grafico_lineas(df_wide, colores, height=400, width=560, series_ocultas=None, **_ignorado):
     """Dibuja un gráfico de líneas (Plotly) a partir de un DataFrame ancho
     (índice = Cohorte, una columna por serie), con el eje Y fijo entre
     ESCALA_Y_MIN y ESCALA_Y_MAX, puntos marcados en cada año y los colores
     indicados en el mismo orden que las columnas. Cada curva se puede
-    activar/desactivar haciendo clic en su nombre en la leyenda."""
+    activar/desactivar haciendo clic en su nombre en la leyenda.
+    `series_ocultas`: nombres de columnas que deben partir apagadas
+    (visibles solo al hacer clic en la leyenda), sin dejar de estar
+    disponibles para el usuario."""
+    series_ocultas = series_ocultas or []
     fig = go.Figure()
     x_vals = [str(a) for a in df_wide.index]
     for col, color in zip(df_wide.columns, colores):
@@ -236,40 +234,9 @@ def grafico_lineas(df_wide, colores, height=400, width=560, **_ignorado):
             line=dict(color=color, width=3),
             marker=dict(size=8, color=color),
             connectgaps=True,
+            visible="legendonly" if col in series_ocultas else True,
             hovertemplate="%{fullData.name}: %{y:.1f}%<extra></extra>",
         ))
-    fig.update_layout(**_layout_base(height, width))
-    st.plotly_chart(fig, use_container_width=False)
-
-
-def grafico_proyeccion_sexo(df_grafico, color_domain, color_range, dash_domain, dash_range, height=430, width=760):
-    """Dibuja el gráfico único de proyección por sexo (Plotly), con líneas
-    punteadas para la parte proyectada y sólidas para la histórica. Cada
-    curva (agrupada por 'Grupo') se activa/desactiva en conjunto al hacer
-    clic en la leyenda, aunque esté compuesta por varios tramos (histórico +
-    proyección)."""
-    color_map = dict(zip(color_domain, color_range))
-    dash_map = {k: _dash_de_vega(v) for k, v in zip(dash_domain, dash_range)}
-    fig = go.Figure()
-    orden_grupos = list(dict.fromkeys(df_grafico["Grupo"]))
-    for grupo in orden_grupos:
-        sub_grupo = df_grafico[df_grafico["Grupo"] == grupo]
-        color = color_map.get(grupo, COLOR_TEXTO)
-        primero = True
-        for dashkey in dict.fromkeys(sub_grupo["DashKey"]):
-            tramo = sub_grupo[sub_grupo["DashKey"] == dashkey].sort_values("Cohorte")
-            fig.add_trace(go.Scatter(
-                x=[str(a) for a in tramo["Cohorte"]],
-                y=tramo["% de retención"],
-                mode="lines+markers",
-                name=grupo,
-                legendgroup=grupo,
-                showlegend=primero,
-                line=dict(color=color, width=2.6, dash=dash_map.get(dashkey, "solid")),
-                marker=dict(size=7, color=color),
-                hovertemplate=f"{grupo} ({dashkey})" + ": %{y:.1f}%<extra></extra>",
-            ))
-            primero = False
     fig.update_layout(**_layout_base(height, width))
     st.plotly_chart(fig, use_container_width=False)
 
@@ -320,6 +287,17 @@ def proyeccion_regresion_lineal_anclada(valores, anios, n_futuro):
     return anios_futuros, resultado
 
 
+def proyeccion_meta(valores, anios, n_futuro, valor_objetivo):
+    """Traza una línea recta desde el último valor real hasta un valor
+    objetivo (meta), de modo que la meta se alcance exactamente en el último
+    año proyectado. El incremento (o disminución) es el mismo cada año."""
+    anios_futuros = [anios[-1] + i for i in range(1, n_futuro + 1)]
+    ultimo_valor = valores[-1]
+    paso = (valor_objetivo - ultimo_valor) / n_futuro
+    resultado = [ultimo_valor + paso * i for i in range(1, n_futuro + 1)]
+    return anios_futuros, resultado
+
+
 def proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tasas=None):
     """Calcula la tasa de crecimiento promedio año a año (%) y la aplica hacia adelante.
     Por defecto usa todas las tasas interanuales del histórico; si se especifica
@@ -338,30 +316,35 @@ def proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tasas=None
     return anios_futuros, resultado, tasa_prom
 
 
-def proyeccion_cagr(valores, anios, n_futuro):
-    """Tasa de crecimiento anual compuesta (CAGR) entre el primer y último año."""
-    valores = np.array(valores, dtype=float)
-    n_periodos = len(valores) - 1
-    cagr = (valores[-1] / valores[0]) ** (1 / n_periodos) - 1
-    resultado = []
-    ultimo = valores[-1]
-    for _ in range(n_futuro):
-        ultimo = ultimo * (1 + cagr)
-        resultado.append(ultimo)
-    anios_futuros = [anios[-1] + i for i in range(1, n_futuro + 1)]
-    return anios_futuros, resultado, cagr
-
-
 METODOS = {
     "Promedio móvil (últimos 3 años)": "pm3",
     "Regresión lineal (ajuste global)": "reg",
     "Regresión lineal (anclada al último año)": "reg_anclada",
     "Tendencia (% de crecimiento promedio)": "tend",
-    "CAGR (crecimiento anual compuesto)": "cagr",
+    "Meta: alcanzar Quintil4 (SIES)": "meta_q4",
+    "Proyección manual": "manual",
 }
 
 
-def calcular_proyeccion(metodo_key, valores, anios, n_futuro, ventana=3, ventana_tend=None):
+def calcular_proyeccion(metodo_key, valores, anios, n_futuro, ventana=3, ventana_tend=None, objetivo_forzado=None):
+    if objetivo_forzado is not None:
+        # Regla de convergencia: la proyección de este grupo (Mujeres/Hombres)
+        # debe llegar exactamente al mismo valor que la proyección General
+        # con este mismo método en el último año. Se calcula la diferencia
+        # entre ese valor objetivo y el último dato real de este grupo, se
+        # reparte en partes iguales entre los años a proyectar, y se va
+        # sumando ese incremento fijo cada año a partir del último valor real.
+        anios_f = [anios[-1] + i for i in range(1, n_futuro + 1)]
+        ultimo_valor = valores[-1]
+        incremento_anual = (objetivo_forzado - ultimo_valor) / n_futuro
+        vals_f = [ultimo_valor + incremento_anual * i for i in range(1, n_futuro + 1)]
+        nota = (
+            f"Se distribuye en partes iguales la diferencia entre el valor que da la "
+            f"proyección General con este método en {anios_f[-1]} ({objetivo_forzado:.1f}%) y el "
+            f"último dato real de este grupo ({ultimo_valor:.1f}%): {incremento_anual:+.2f}pp por año, "
+            f"hasta llegar exactamente a {objetivo_forzado:.1f}% en {anios_f[-1]}."
+        )
+        return anios_f, vals_f, nota
     if metodo_key == "pm3":
         anios_f, vals_f = proyeccion_promedio_movil(valores, anios, n_futuro, ventana)
         nota = f"Promedio móvil con ventana de {ventana} años."
@@ -371,13 +354,18 @@ def calcular_proyeccion(metodo_key, valores, anios, n_futuro, ventana=3, ventana
     elif metodo_key == "reg_anclada":
         anios_f, vals_f = proyeccion_regresion_lineal_anclada(valores, anios, n_futuro)
         nota = "Regresión lineal anclada al último valor real, proyectada con la pendiente del histórico."
+    elif metodo_key == "meta_q4":
+        anios_f, vals_f = proyeccion_meta(valores, anios, n_futuro, VALOR_META_Q4)
+        nota = (
+            f"Trayectoria lineal que apunta a alcanzar el valor de Quintil4 SIES "
+            f"({VALOR_META_Q4:.1f}%, dato {int(ANIOS_SIES[-1])}) en {n_futuro} año(s)."
+        )
     elif metodo_key == "tend":
         anios_f, vals_f, tasa = proyeccion_tendencia_porcentual(valores, anios, n_futuro, ventana_tend)
         alcance = f"últimas {ventana_tend} tasas interanuales" if ventana_tend else "todas las tasas interanuales del histórico"
         nota = f"Tasa de crecimiento promedio aplicada: {tasa*100:.2f}% anual (calculada sobre {alcance})."
-    elif metodo_key == "cagr":
-        anios_f, vals_f, cagr = proyeccion_cagr(valores, anios, n_futuro)
-        nota = f"CAGR calculado: {cagr*100:.2f}% anual."
+    elif metodo_key == "manual":
+        raise ValueError("Falta ingresar la proyección manual en el modo General")
     else:
         raise ValueError("Método no reconocido")
     return anios_f, vals_f, nota
@@ -390,7 +378,7 @@ st.sidebar.title("⚙️ Configuración")
 
 modo = st.sidebar.radio(
     "Modo de simulación",
-    ["General (sin separar por sexo)", "Por sexo"],
+    ["General (sin separar por sexo)", "Mujeres", "Hombres"],
 )
 
 st.sidebar.markdown("---")
@@ -401,7 +389,7 @@ metodo_nombre = st.sidebar.selectbox("Método de simulación", list(METODOS.keys
 metodo_key = METODOS[metodo_nombre]
 st.sidebar.caption(
     "💡 Datos no estacionarios (con tendencia): se recomienda priorizar "
-    "Regresión lineal, Tendencia (%) o CAGR."
+    "Regresión lineal o Tendencia (%)."
 )
 
 comparar_todos = st.sidebar.checkbox("Comparar todos los métodos a la vez", value=False)
@@ -428,7 +416,42 @@ if metodo_key == "tend" or comparar_todos:
 # =========================================================
 # 4. CARGA DE DATOS
 # =========================================================
-df_entrada = datos_general if modo.startswith("General") else datos_sexo
+_PLURAL_SEXO = {"Mujer": "mujeres", "Hombre": "hombres"}
+
+
+def _nota_sies_sexo(sexo):
+    return f"Curva de referencia: {NOMBRE_SIES} ({_PLURAL_SEXO.get(sexo, sexo.lower())})."
+
+
+def _filtrar_por_sexo(sexo):
+    """Extrae el histórico UAH y la referencia SIES de un sexo específico,
+    dejándolos con la misma forma (Cohorte + una sola columna de %) que
+    espera mostrar_bloque_general."""
+    df = (
+        datos_sexo[datos_sexo["Sexo"] == sexo][["Cohorte", "% de retención"]]
+        .reset_index(drop=True)
+    )
+    df_sies = (
+        datos_sexo_sies[datos_sexo_sies["Sexo"] == sexo][["Cohorte", "% de retención"]]
+        .reset_index(drop=True)
+        .rename(columns={"% de retención": NOMBRE_SIES})
+    )
+    return df, df_sies
+
+
+if modo.startswith("General"):
+    df_entrada = datos_general
+    df_sies_entrada = datos_general_sies
+    titulo_modo = "General"
+    nota_sies_modo = NOTA_SIES_GENERAL
+elif modo == "Mujeres":
+    df_entrada, df_sies_entrada = _filtrar_por_sexo("Mujer")
+    titulo_modo = "Mujeres"
+    nota_sies_modo = _nota_sies_sexo("Mujer")
+else:
+    df_entrada, df_sies_entrada = _filtrar_por_sexo("Hombre")
+    titulo_modo = "Hombres"
+    nota_sies_modo = _nota_sies_sexo("Hombre")
 
 
 # =========================================================
@@ -445,7 +468,41 @@ COLOR_SIES_5 = "#3d3d3d"
 COLORES_SIES_GENERAL = [COLOR_SIES_PROMEDIO, COLOR_SIES_MIN, COLOR_SIES_MAX, COLOR_SIES_Q4, COLOR_SIES_5]
 
 
-def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True, df_sies=None):
+def _widget_manual_general(anios, valores, n_futuro, key_suffix=""):
+    """Tabla editable para ingresar la Proyección manual de General. Se puede
+    llamar tanto desde la vista de un solo método como desde 'comparar
+    todos'; ambas comparten el mismo valor guardado en session_state, así
+    que editar en una se refleja en la otra."""
+    st.markdown(
+        "✏️ **Edita directamente los valores proyectados** para la Proyección "
+        "manual (se refleja también en Mujeres y Hombres):"
+    )
+    anios_f = [anios[-1] + i for i in range(1, n_futuro + 1)]
+    valores_previos = st.session_state.get("manual_general_valores")
+    if not valores_previos or len(valores_previos) != n_futuro:
+        valores_previos = [valores[-1]] * n_futuro
+    df_manual_editado = st.data_editor(
+        pd.DataFrame({"Cohorte": anios_f, "% de retención proyectada": valores_previos}),
+        use_container_width=False,
+        hide_index=True,
+        key=f"editor_manual_general_{n_futuro}_{key_suffix}",
+        disabled=["Cohorte"],
+        column_config={
+            "% de retención proyectada": st.column_config.NumberColumn(
+                "% de retención proyectada", format="%.1f%%",
+            ),
+        },
+    )
+    vals_f = df_manual_editado["% de retención proyectada"].tolist()
+    st.session_state["manual_general_valores"] = vals_f
+    st.session_state["manual_general_anios"] = anios_f
+    return anios_f, vals_f
+
+
+def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True, df_sies=None, nota_sies=None, objetivos_forzados=None):
+    objetivos_forzados = objetivos_forzados or {}
+    if nota_sies is None:
+        nota_sies = NOTA_SIES_GENERAL
     st.subheader(f"📁 Datos históricos — {titulo}")
     col_tabla, col_grafico = st.columns([1, 2])
     with col_tabla:
@@ -461,11 +518,35 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
                 df_hist_sies = pd.merge(df, df_sies, on="Cohorte", how="outer").sort_values("Cohorte")
                 columnas_sies = [c for c in df_sies.columns if c != "Cohorte"]
                 colores_sies = COLORES_SIES_GENERAL[: len(columnas_sies)]
-                grafico_lineas(
-                    df_hist_sies.set_index("Cohorte")[["% de retención"] + columnas_sies],
-                    colores=[COLOR_ACENTO] + colores_sies,
+                df_grafico_hist = (
+                    df_hist_sies.set_index("Cohorte")[["% de retención"] + columnas_sies]
+                    .rename(columns={"% de retención": "Retención UAH"})
                 )
-                st.caption(NOTA_SIES_GENERAL)
+                # --- Versión anterior: se incluían las 5 curvas SIES y las
+                # --- inactivas quedaban ocultas pero disponibles con un
+                # --- clic en la leyenda (series_ocultas). Se deja comentado
+                # --- por si se quiere volver a habilitar esa opción.
+                # series_ocultas_sies = (
+                #     [c for c in columnas_sies if c != NOMBRE_SIES_Q4]
+                #     if NOMBRE_SIES_Q4 in columnas_sies else None
+                # )
+                # grafico_lineas(
+                #     df_grafico_hist,
+                #     colores=[COLOR_ACENTO] + colores_sies,
+                #     series_ocultas=series_ocultas_sies,
+                # )
+                columnas_sies_activas = (
+                    [NOMBRE_SIES_Q4] if NOMBRE_SIES_Q4 in columnas_sies else columnas_sies
+                )
+                colores_sies_activas = [
+                    color for col, color in zip(columnas_sies, colores_sies)
+                    if col in columnas_sies_activas
+                ]
+                grafico_lineas(
+                    df_grafico_hist[["Retención UAH"] + columnas_sies_activas],
+                    colores=[COLOR_ACENTO] + colores_sies_activas,
+                )
+                st.caption(nota_sies)
             else:
                 grafico_lineas(df.set_index("Cohorte")[["% de retención"]], colores=[COLOR_ACENTO])
 
@@ -475,6 +556,8 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
     st.subheader(f"🔮 Proyección — {titulo}")
 
     if comparar_todos:
+        if titulo == "General":
+            _widget_manual_general(anios, valores, n_futuro, key_suffix="comparar")
         df_comp = pd.DataFrame({"Cohorte": anios, "Histórico UAH": valores})
         columnas_sies = []
         if df_sies is not None:
@@ -484,9 +567,18 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         df_futuro = None
         for nombre, key in METODOS.items():
             try:
-                anios_f, vals_f, nota = calcular_proyeccion(
-                    key, valores, anios, n_futuro, ventana, ventana_tend
-                )
+                if key == "manual" and titulo == "General":
+                    valores_manual = st.session_state.get("manual_general_valores")
+                    if not valores_manual or len(valores_manual) != n_futuro:
+                        raise ValueError("aún no ingresado en la vista de un solo método")
+                    anios_f = st.session_state.get("manual_general_anios")
+                    vals_f = valores_manual
+                    nota = "Valores ingresados manualmente (ver vista de un solo método para editarlos)."
+                else:
+                    anios_f, vals_f, nota = calcular_proyeccion(
+                        key, valores, anios, n_futuro, ventana, ventana_tend,
+                        objetivo_forzado=objetivos_forzados.get(nombre),
+                    )
                 serie = pd.Series(
                     [np.nan] * len(anios) + list(vals_f),
                     index=anios + anios_f,
@@ -515,17 +607,56 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         paleta_metodos_disponible = [c for c in PALETA_METODOS if c != COLOR_SIES]
         colores_cols += paleta_metodos_disponible[1: 1 + len(metodos_presentes)]
         df_comp = df_comp[["Cohorte"] + orden_cols]
+
+        metodos_activos_por_defecto = {
+            "Regresión lineal (anclada al último año)", "Tendencia (% de crecimiento promedio)",
+            "Meta: alcanzar Quintil4 (SIES)",
+        }
+        if NOMBRE_SIES_Q4 in columnas_sies:
+            # Modo General: 5 curvas SIES: solo dejamos activa Quintil4.
+            sies_activas_por_defecto = {NOMBRE_SIES_Q4}
+        else:
+            # Modo Mujeres/Hombres: una sola curva de referencia SIES, se deja activa.
+            sies_activas_por_defecto = set(columnas_sies)
+        activas_por_defecto_comparar = {"Histórico UAH"} | sies_activas_por_defecto | metodos_activos_por_defecto
+
+        # --- Versión anterior: se mostraban todas las columnas/curvas y las
+        # --- inactivas quedaban ocultas pero disponibles con un clic en la
+        # --- leyenda (series_ocultas). Se deja comentado por si se quiere
+        # --- volver a habilitar esa opción.
+        # col_config = {
+        #     col: st.column_config.NumberColumn(col, format="%.1f%%")
+        #     for col in df_comp.columns if col != "Cohorte"
+        # }
+        # st.dataframe(df_comp, use_container_width=False, hide_index=True, column_config=col_config)
+        # series_ocultas_comparar = (
+        #     [c for c in orden_cols if c not in activas_por_defecto_comparar]
+        #     if columnas_sies else None
+        # )
+        # grafico_lineas(
+        #     df_comp.set_index("Cohorte"), colores=colores_cols,
+        #     width=760, legend_columns=2, legend_label_limit=320,
+        #     series_ocultas=series_ocultas_comparar,
+        # )
+
+        # Ahora: solo se muestran (tabla y gráfico) las columnas activas por
+        # defecto; el resto ni siquiera se dibuja/lista.
+        orden_cols_activas = [c for c in orden_cols if c in activas_por_defecto_comparar]
+        colores_cols_activas = [
+            color for col, color in zip(orden_cols, colores_cols) if col in activas_por_defecto_comparar
+        ]
+        df_comp = df_comp[["Cohorte"] + orden_cols_activas]
         col_config = {
             col: st.column_config.NumberColumn(col, format="%.1f%%")
             for col in df_comp.columns if col != "Cohorte"
         }
         st.dataframe(df_comp, use_container_width=False, hide_index=True, column_config=col_config)
         grafico_lineas(
-            df_comp.set_index("Cohorte"), colores=colores_cols,
+            df_comp.set_index("Cohorte"), colores=colores_cols_activas,
             width=760, legend_columns=2, legend_label_limit=320,
         )
         if columnas_sies:
-            st.caption(NOTA_SIES_GENERAL)
+            st.caption(nota_sies)
         st.markdown("**Notas de cada método:**")
         st.markdown("\n".join(notas))
 
@@ -534,6 +665,9 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
             st.warning("No fue posible calcular ningún método con los datos actuales.")
         else:
             df_futuro = df_futuro.reset_index().rename(columns={"index": "Cohorte"}).sort_values("Cohorte")
+            # Se deja solo con los métodos activos por defecto (mismo criterio que el gráfico/tabla de arriba).
+            metodos_activos_presentes = [c for c in df_futuro.columns if c != "Cohorte" and c in activas_por_defecto_comparar]
+            df_futuro = df_futuro[["Cohorte"] + metodos_activos_presentes]
             col_config_futuro = {
                 col: st.column_config.NumberColumn(col, format="%.1f%%")
                 for col in df_futuro.columns if col != "Cohorte"
@@ -548,11 +682,37 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
                 mime="text/csv",
             )
     else:
-        anios_f, vals_f, nota = calcular_proyeccion(
-            metodo_key, valores, anios, n_futuro, ventana, ventana_tend
-        )
+        datos_manual_incompletos = False
+        if metodo_key == "manual" and titulo == "General":
+            anios_f, vals_f = _widget_manual_general(anios, valores, n_futuro, key_suffix="single")
+            nota = "Proyección ingresada manualmente para General. Este mismo escenario se refleja en Mujeres y Hombres, cada uno convergiendo al valor de 2030 que definas aquí."
+        elif metodo_key == "manual" and titulo != "General":
+            objetivo = objetivos_forzados.get(metodo_nombre)
+            if objetivo is None:
+                st.warning(
+                    "Todavía no has ingresado la proyección manual en el modo **General**. "
+                    "Ve a General, elige 'Proyección manual' y define los valores; "
+                    "luego vuelve aquí para ver el escenario equivalente."
+                )
+                datos_manual_incompletos = True
+                anios_f, vals_f, nota = [], [], ""
+            else:
+                anios_f, vals_f, nota = calcular_proyeccion(
+                    metodo_key, valores, anios, n_futuro, ventana, ventana_tend,
+                    objetivo_forzado=objetivo,
+                )
+        else:
+            anios_f, vals_f, nota = calcular_proyeccion(
+                metodo_key, valores, anios, n_futuro, ventana, ventana_tend,
+                objetivo_forzado=objetivos_forzados.get(metodo_nombre),
+            )
+
+        if datos_manual_incompletos:
+            return
+
         df_proy = pd.DataFrame({"Cohorte": anios_f, "% de retención proyectada": vals_f})
-        st.info(nota)
+        if nota:
+            st.info(nota)
 
         df_hist_plot = df.rename(columns={"% de retención": "Histórico UAH"})
         df_proy_plot = df_proy.rename(columns={"% de retención proyectada": "Proyección"})
@@ -567,11 +727,28 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         if df_sies is not None:
             columnas_sies = [c for c in df_sies.columns if c != "Cohorte"]
             df_final = pd.merge(df_final, df_sies, on="Cohorte", how="outer").sort_values("Cohorte")
-            columnas_chart += columnas_sies
-            colores_chart += COLORES_SIES_GENERAL[: len(columnas_sies)]
-        grafico_lineas(df_final.set_index("Cohorte")[columnas_chart], colores=colores_chart)
+            # --- Versión anterior: se incluían todas las curvas SIES y las
+            # --- inactivas quedaban ocultas pero disponibles con un clic en
+            # --- la leyenda (series_ocultas). Se deja comentado por si se
+            # --- quiere volver a habilitar esa opción.
+            # columnas_chart += columnas_sies
+            # colores_chart += COLORES_SIES_GENERAL[: len(columnas_sies)]
+            # series_ocultas_chart = None
+            # if NOMBRE_SIES_Q4 in columnas_sies:
+            #     activas_por_defecto = {NOMBRE_SIES_MAX}
+            #     series_ocultas_chart = [c for c in columnas_sies if c not in activas_por_defecto]
+            colores_sies_dict = dict(zip(columnas_sies, COLORES_SIES_GENERAL[: len(columnas_sies)]))
+            columnas_sies_activas = (
+                [NOMBRE_SIES_MAX] if NOMBRE_SIES_Q4 in columnas_sies else columnas_sies
+            )
+            columnas_chart += columnas_sies_activas
+            colores_chart += [colores_sies_dict[c] for c in columnas_sies_activas]
+        grafico_lineas(
+            df_final.set_index("Cohorte")[columnas_chart],
+            colores=colores_chart,
+        )
         if df_sies is not None:
-            st.caption(NOTA_SIES_GENERAL)
+            st.caption(nota_sies)
 
         st.markdown("#### 📋 Tabla resumen — valor proyectado por cohorte")
         st.dataframe(
@@ -596,165 +773,29 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
 
 
 # =========================================================
-# 6. MODO POR SEXO
+# 6. EJECUCIÓN SEGÚN MODO
 # =========================================================
-DASH_SOLIDO = [1, 0]
-DASH_MEDIO = [6, 3]
-DASH_FINO = [2, 2]
+objetivos_forzados_modo = None
+if not modo.startswith("General"):
+    anios_general = datos_general["Cohorte"].tolist()
+    valores_general = datos_general["% de retención"].tolist()
+    objetivos_forzados_modo = {}
+    for nombre, key in METODOS.items():
+        if key == "manual":
+            valores_manual = st.session_state.get("manual_general_valores")
+            if valores_manual and len(valores_manual) == n_futuro:
+                objetivos_forzados_modo[nombre] = valores_manual[-1]
+            continue  # si aún no se ingresó la proyección manual en General, se deja sin forzar
+        try:
+            _, vals_f_general, _ = calcular_proyeccion(key, valores_general, anios_general, n_futuro, ventana, ventana_tend)
+            objetivos_forzados_modo[nombre] = vals_f_general[-1]  # valor de General en el último año proyectado
+        except Exception:
+            pass  # si un método falla para General, se deja sin forzar (usa su propia lógica)
 
-PALETA_METODOS_SEXO = ["#8c8c8c", "#c9542b", "#4d4d4d", "#ffb08c", "#603813"]
-
-
-def mostrar_bloque_por_sexo(df, df_sies=None):
-    st.subheader("📁 Datos históricos — Por sexo")
-
-    pivot = df.pivot(index="Cohorte", columns="Sexo", values="% de retención").reset_index()
-    columnas_orden = ["Cohorte"] + [c for c in ["Mujer", "Hombre"] if c in pivot.columns]
-    pivot = pivot[columnas_orden]
-    col_config_pivot = {
-        "Cohorte": st.column_config.NumberColumn("Cohorte", format="%d"),
-        "Mujer": st.column_config.NumberColumn("Mujer", format="%.1f%%"),
-        "Hombre": st.column_config.NumberColumn("Hombre", format="%.1f%%"),
-    }
-    col_tabla3, col_grafico3 = st.columns([1, 2])
-    with col_tabla3:
-        st.dataframe(pivot, use_container_width=False, hide_index=True, column_config=col_config_pivot)
-
-    pivot_chart = df.pivot(index="Cohorte", columns="Sexo", values="% de retención")
-    orden_sexo = [c for c in ["Mujer", "Hombre"] if c in pivot_chart.columns]
-    pivot_chart = pivot_chart[orden_sexo]
-    colores_hist = [COLOR_ACENTO, COLOR_TEXTO][: len(orden_sexo)]
-    colores_sies_sexo = {"Mujer": "#c9c9c9", "Hombre": "#4d4d4d"}
-
-    with col_grafico3:
-        if df_sies is not None:
-            pivot_sies = df_sies.pivot(index="Cohorte", columns="Sexo", values="% de retención")
-            pivot_sies = pivot_sies[[c for c in ["Mujer", "Hombre"] if c in pivot_sies.columns]]
-            pivot_sies = pivot_sies.rename(columns={c: f"{c} - {NOMBRE_SIES}" for c in pivot_sies.columns})
-            pivot_chart_full = pivot_chart.join(pivot_sies, how="outer")
-            colores_hist_full = colores_hist + [colores_sies_sexo.get(s, COLOR_SIES) for s in orden_sexo]
-            grafico_lineas(pivot_chart_full, colores=colores_hist_full)
-        else:
-            grafico_lineas(pivot_chart, colores=colores_hist)
-
-    st.subheader("🔮 Proyección — Por sexo (gráfico y tabla únicos)")
-
-    sexos = orden_sexo  # ["Mujer", "Hombre"]
-    registros = []       # para el gráfico (formato largo)
-    notas = []
-    df_futuro_final = None  # para la tabla resumen (formato ancho)
-
-    if comparar_todos:
-        for sexo in sexos:
-            df_sexo = df[df["Sexo"] == sexo][["Cohorte", "% de retención"]].reset_index(drop=True)
-            anios = df_sexo["Cohorte"].tolist()
-            valores = df_sexo["% de retención"].tolist()
-
-            for a, v in zip(anios, valores):
-                registros.append({"Cohorte": a, "% de retención": v, "Grupo": f"Histórico UAH - {sexo}", "DashKey": "Histórico"})
-
-            for i, (nombre, key) in enumerate(METODOS.items()):
-                try:
-                    anios_f, vals_f, nota = calcular_proyeccion(
-                        key, valores, anios, n_futuro, ventana, ventana_tend
-                    )
-                    serie_anios = [anios[-1]] + anios_f
-                    serie_vals = [valores[-1]] + vals_f
-                    for a, v in zip(serie_anios, serie_vals):
-                        registros.append({
-                            "Cohorte": a, "% de retención": v, "Grupo": nombre, "DashKey": f"Proyección - {sexo}",
-                        })
-                    notas.append(f"- **{sexo} — {nombre}**: {nota}")
-
-                    serie_futuro = pd.Series(vals_f, index=anios_f, name=f"{sexo} - {nombre}")
-                    df_futuro_final = (
-                        serie_futuro.to_frame() if df_futuro_final is None
-                        else df_futuro_final.join(serie_futuro, how="outer")
-                    )
-                except Exception as e:
-                    notas.append(f"- **{sexo} — {nombre}**: no se pudo calcular ({e})")
-
-        color_domain = [f"Histórico UAH - {s}" for s in sexos] + list(METODOS.keys())
-        color_range = ([COLOR_ACENTO, COLOR_TEXTO][: len(sexos)]) + PALETA_METODOS_SEXO[: len(METODOS)]
-        dash_domain = ["Histórico"] + [f"Proyección - {s}" for s in sexos]
-        dash_range = [DASH_SOLIDO, DASH_MEDIO, DASH_FINO][: len(dash_domain)]
-
-    else:
-        for sexo in sexos:
-            df_sexo = df[df["Sexo"] == sexo][["Cohorte", "% de retención"]].reset_index(drop=True)
-            anios = df_sexo["Cohorte"].tolist()
-            valores = df_sexo["% de retención"].tolist()
-
-            for a, v in zip(anios, valores):
-                registros.append({"Cohorte": a, "% de retención": v, "Grupo": sexo, "DashKey": "Histórico"})
-
-            anios_f, vals_f, nota = calcular_proyeccion(
-                metodo_key, valores, anios, n_futuro, ventana, ventana_tend
-            )
-            serie_anios = [anios[-1]] + anios_f
-            serie_vals = [valores[-1]] + vals_f
-            for a, v in zip(serie_anios, serie_vals):
-                registros.append({"Cohorte": a, "% de retención": v, "Grupo": sexo, "DashKey": "Proyección"})
-            notas.append(f"- **{sexo}**: {nota}")
-
-            serie_futuro = pd.Series(vals_f, index=anios_f, name=sexo)
-            df_futuro_final = (
-                serie_futuro.to_frame() if df_futuro_final is None
-                else df_futuro_final.join(serie_futuro, how="outer")
-            )
-
-        color_domain = list(sexos)
-        color_range = [COLOR_ACENTO, COLOR_TEXTO][: len(sexos)]
-        dash_domain = ["Histórico", "Proyección"]
-        dash_range = [DASH_SOLIDO, DASH_MEDIO]
-
-    if df_sies is not None:
-        for sexo in sexos:
-            df_s = df_sies[df_sies["Sexo"] == sexo][["Cohorte", "% de retención"]]
-            for _, fila in df_s.iterrows():
-                registros.append({
-                    "Cohorte": fila["Cohorte"], "% de retención": fila["% de retención"],
-                    "Grupo": f"{sexo} - {NOMBRE_SIES}", "DashKey": "Histórico",
-                })
-            color_domain.append(f"{sexo} - {NOMBRE_SIES}")
-            color_range.append(colores_sies_sexo.get(sexo, COLOR_SIES))
-
-    df_grafico = pd.DataFrame(registros)
-    grafico_proyeccion_sexo(
-        df_grafico, color_domain=color_domain, color_range=color_range,
-        dash_domain=dash_domain, dash_range=dash_range, height=430, width=760,
-    )
-
-    st.markdown("**Notas de la proyección:**")
-    st.markdown("\n".join(notas))
-
-    st.markdown("#### 📋 Tabla resumen — valor proyectado por cohorte (única, ambos sexos)")
-    if df_futuro_final is None:
-        st.warning("No fue posible calcular la proyección con los datos actuales.")
-    else:
-        df_futuro_final = df_futuro_final.reset_index().rename(columns={"index": "Cohorte"}).sort_values("Cohorte")
-        col_config_futuro = {
-            col: st.column_config.NumberColumn(col, format="%.1f%%")
-            for col in df_futuro_final.columns if col != "Cohorte"
-        }
-        st.dataframe(df_futuro_final, use_container_width=False, hide_index=True, column_config=col_config_futuro)
-
-        csv = df_futuro_final.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Descargar tabla de proyecciones (CSV)",
-            data=csv,
-            file_name="proyeccion_por_sexo.csv",
-            mime="text/csv",
-        )
-
-
-# =========================================================
-# 7. EJECUCIÓN SEGÚN MODO
-# =========================================================
-if modo.startswith("General"):
-    mostrar_bloque_general(df_entrada, titulo="General", df_sies=datos_general_sies)
-else:
-    mostrar_bloque_por_sexo(df_entrada, df_sies=datos_sexo_sies)
+mostrar_bloque_general(
+    df_entrada, titulo=titulo_modo, df_sies=df_sies_entrada, nota_sies=nota_sies_modo,
+    objetivos_forzados=objetivos_forzados_modo,
+)
 
 st.markdown("---")
 with st.expander("ℹ️ Descripción de los métodos de simulación disponibles"):
@@ -770,16 +811,21 @@ with st.expander("ℹ️ Descripción de los métodos de simulación disponibles
   defecto usa **todo el histórico**, pero puede limitarse a las últimas N
   variaciones interanuales desde la barra lateral. Recomendado para series
   con tendencia.
-- **CAGR (crecimiento anual compuesto):** es la tasa de crecimiento que, si
-  se repitiera exactamente igual cada año, llevaría desde el primer valor
-  del histórico hasta el último — como el interés compuesto de una
-  inversión. La fórmula solo usa el primer y el último año, pero eso no
-  significa que ignore lo que pasó en el medio: es un atajo matemático
-  equivalente a promediar el crecimiento de todos los años "encadenándolos"
-  entre sí, en vez de simplemente sumarlos y dividir. Por eso, si el
-  indicador subió de forma pareja, el CAGR da prácticamente lo mismo que
-  Tendencia; pero si hubo algún año con un salto raro, el CAGR le da menos
-  peso a ese sobresalto, porque en el fondo solo le importa dónde arrancaste
-  y dónde terminaste. Recomendado para series con tendencia.
+- **Meta: alcanzar Quintil4 (SIES):** no se basa en la tendencia histórica de
+  UAH, sino que traza una línea recta desde el último valor real hasta el
+  valor más reciente de Quintil4 (SIES), de modo que esa meta se alcance
+  justo en el último año proyectado. El incremento anual es siempre el
+  mismo. Útil para visualizar qué ritmo de mejora se necesitaría para
+  cerrar la brecha con ese referente nacional, más que para predecir lo que
+  probablemente ocurrirá.
+- **Proyección manual:** disponible solo en el modo General. Permite editar
+  directamente, año por año, los valores proyectados en la tabla (en vez de
+  calcularlos con una fórmula). En los modos Mujeres y Hombres, este método
+  no se edita: se calcula automáticamente para que cada uno converja
+  exactamente al mismo valor que definiste manualmente para General en el
+  último año, repartiendo la diferencia respecto a su propio último dato
+  real en partes iguales (igual que el resto de los métodos). Si aún no has
+  ingresado la proyección manual en General, en Mujeres/Hombres aparecerá
+  un aviso pidiendo hacerlo primero.
         """
     )
