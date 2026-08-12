@@ -95,8 +95,11 @@ st.markdown(
         border: 1px solid #ddd9cd;
         height: 100%;
     }}
-    .uah-card h3 {{
+    .uah-card-title {{
         margin-top: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1.3;
     }}
     .uah-card-accent {{
         border-left: 4px solid {COLOR_ACENTO};
@@ -156,12 +159,10 @@ with col1:
     st.markdown(
         """
         <div class="uah-card uah-card-accent">
-            <h3>📊 Simulador Retención 1er Año</h3>
-            <p>Proyecta el cumplimiento de metas institucionales a futuro,
-            en modo General o desagregado por sexo, comparando distintos
-            métodos de simulación (promedio móvil, regresión lineal,
-            tendencia y CAGR) frente a los datos del sistema universitario
-            completo (SIES).</p>
+            <div class="uah-card-title">📊 Retención 1er Año</div>
+            <p>Proyecta el cumplimiento de metas de Retención 1er Año a
+            futuro, en modo General o desagregado por sexo, comparando
+            distintos métodos de simulación.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -171,12 +172,11 @@ with col2:
     st.markdown(
         """
         <div class="uah-card uah-card-accent">
-            <h3>📊 Simulador Retención 3er Año</h3>
-            <p>Proyecta el cumplimiento de metas institucionales a futuro,
-            en modo General o desagregado por sexo, comparando distintos
-            métodos de simulación (promedio móvil, regresión lineal,
-            tendencia y CAGR) frente a los datos del sistema universitario
-            completo (SIES).</p>
+            <div class="uah-card-title">📊 Retención 3er Año</div>
+            <p>Proyecta el cumplimiento de metas de Retención 3er Año a
+            futuro, en modo General o desagregado por sexo, comparando
+            distintos métodos de simulación.
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -185,10 +185,11 @@ with col2:
 with col3:
     st.markdown(
         """
-        <div class="uah-card">
-            <h3>➕ Próximamente</h3>
-            <p>Este espacio queda disponible para agregar nuevas
-            herramientas o simuladores a la plataforma.</p>
+        <div class="uah-card uah-card-accent">
+            <div class="uah-card-title">🎓 Titulación Oportuna</div>
+            <p>Proyecta el cumplimiento de metas de Titulación Oportuna a
+            futuro, en modo General o desagregado por sexo, comparando
+            distintos métodos de simulación.</p>
         </div>
         """,
         unsafe_allow_html=True,
