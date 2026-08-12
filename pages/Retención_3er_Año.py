@@ -292,7 +292,7 @@ def proyeccion_crecimiento_fijo(valores, anios, n_futuro, incremento):
 
 
 METODOS = {
-    "Regresión lineal (anclada al último año)": "reg_anclada",
+    "Regresión lineal (ajustada al último año)": "reg_anclada",
     "Crecimiento fijo +1 pp/año": "crec_1",
     "Crecimiento fijo +1.5 pp/año": "crec_15",
     "Crecimiento fijo +2 pp/año": "crec_2",
@@ -327,7 +327,7 @@ def calcular_proyeccion(metodo_key, valores, anios, n_futuro, ventana=3, ventana
         nota = "Ajuste por regresión lineal (mínimos cuadrados) sobre todo el histórico."
     elif metodo_key == "reg_anclada":
         anios_f, vals_f = proyeccion_regresion_lineal_anclada(valores, anios, n_futuro)
-        nota = "Regresión lineal anclada al último valor real, proyectada con la pendiente del histórico."
+        nota = "Regresión lineal ajustada al último valor real, proyectada con la pendiente del histórico."
     elif metodo_key == "crec_1":
         anios_f, vals_f = proyeccion_crecimiento_fijo(valores, anios, n_futuro, 1.0)
         nota = "Crecimiento fijo de +1 punto porcentual por año, a partir del último valor real."
@@ -358,7 +358,10 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Proyección")
 n_futuro = st.sidebar.slider("Cohortes a proyectar", min_value=1, max_value=5, value=5)
 
-metodo_nombre = st.sidebar.selectbox("Método de simulación", list(METODOS.keys()))
+metodo_nombre = st.sidebar.selectbox(
+    "Método de simulación", list(METODOS.keys()),
+    index=list(METODOS.keys()).index("Proyección manual"),
+)
 metodo_key = METODOS[metodo_nombre]
 st.sidebar.caption(
     "💡 Histórico muy parejo (sin tendencia clara): se incluyeron tres "
@@ -404,33 +407,60 @@ COLOR_SIES = "#8c8c8c"
 
 
 def _widget_manual_general(anios, valores, n_futuro, key_suffix=""):
-    """Tabla editable para ingresar la Proyección manual de General. Se puede
+    """Dos formas de ingresar la Proyección manual de General. Se puede
     llamar tanto desde la vista de un solo método como desde 'comparar
     todos'; ambas comparten el mismo valor guardado en session_state, así
     que editar en una se refleja en la otra."""
-    st.markdown(
-        "✏️ **Edita directamente los valores proyectados** para la Proyección "
-        "manual (se refleja también en Mujeres y Hombres):"
-    )
     anios_f = [anios[-1] + i for i in range(1, n_futuro + 1)]
-    valores_previos = st.session_state.get("manual_general_valores")
-    if not valores_previos or len(valores_previos) != n_futuro:
-        valores_previos = [valores[-1]] * n_futuro
-    df_manual_editado = st.data_editor(
-        pd.DataFrame({"Cohorte": anios_f, "% de retención proyectada": valores_previos}),
-        use_container_width=False,
-        hide_index=True,
-        key=f"editor_manual_general_{n_futuro}_{key_suffix}",
-        disabled=["Cohorte"],
-        column_config={
-            "% de retención proyectada": st.column_config.NumberColumn(
-                "% de retención proyectada", format="%.1f%%",
-            ),
-        },
+    ultimo_valor = valores[-1]
+
+    modo_manual = st.radio(
+        "¿Cómo quieres ingresar la proyección manual?",
+        ["Año por año", f"Solo la meta {anios_f[-1]} (reparto en partes iguales)"],
+        key=f"modo_manual_{key_suffix}_ret3",
+        horizontal=True,
     )
-    vals_f = df_manual_editado["% de retención proyectada"].tolist()
-    st.session_state["manual_general_valores"] = vals_f
-    st.session_state["manual_general_anios"] = anios_f
+
+    if modo_manual.startswith("Solo"):
+        valor_meta_manual = st.number_input(
+            f"Meta — % de retención en {anios_f[-1]}",
+            min_value=0.0, max_value=100.0,
+            value=float(st.session_state.get("manual_general_meta_ret3", ultimo_valor)),
+            step=0.1,
+            key=f"meta_manual_{key_suffix}_ret3",
+        )
+        incremento = (valor_meta_manual - ultimo_valor) / n_futuro
+        vals_f = [ultimo_valor + incremento * i for i in range(1, n_futuro + 1)]
+        st.session_state["manual_general_meta_ret3"] = valor_meta_manual
+        st.caption(
+            f"Se reparte en partes iguales: {incremento:+.2f}pp por año, desde "
+            f"{ultimo_valor:.1f}% ({anios[-1]}, último real) hasta {valor_meta_manual:.1f}% "
+            f"en {anios_f[-1]}."
+        )
+    else:
+        st.markdown(
+            "✏️ **Edita directamente los valores proyectados** para la Proyección "
+            "manual (se refleja también en Mujeres y Hombres):"
+        )
+        valores_previos = st.session_state.get("manual_general_valores_ret3")
+        if not valores_previos or len(valores_previos) != n_futuro:
+            valores_previos = [ultimo_valor] * n_futuro
+        df_manual_editado = st.data_editor(
+            pd.DataFrame({"Cohorte": anios_f, "% de retención proyectada": valores_previos}),
+            use_container_width=False,
+            hide_index=True,
+            key=f"editor_manual_general_{n_futuro}_{key_suffix}_ret3",
+            disabled=["Cohorte"],
+            column_config={
+                "% de retención proyectada": st.column_config.NumberColumn(
+                    "% de retención proyectada", format="%.1f%%",
+                ),
+            },
+        )
+        vals_f = df_manual_editado["% de retención proyectada"].tolist()
+
+    st.session_state["manual_general_valores_ret3"] = vals_f
+    st.session_state["manual_general_anios_ret3"] = anios_f
     return anios_f, vals_f
 
 
@@ -478,10 +508,10 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
         for nombre, key in METODOS.items():
             try:
                 if key == "manual" and titulo == "General":
-                    valores_manual = st.session_state.get("manual_general_valores")
+                    valores_manual = st.session_state.get("manual_general_valores_ret3")
                     if not valores_manual or len(valores_manual) != n_futuro:
                         raise ValueError("aún no ingresado en la vista de un solo método")
-                    anios_f = st.session_state.get("manual_general_anios")
+                    anios_f = st.session_state.get("manual_general_anios_ret3")
                     vals_f = valores_manual
                     nota = "Valores ingresados manualmente (ver vista de un solo método para editarlos)."
                 else:
@@ -524,10 +554,11 @@ def mostrar_bloque_general(df, titulo="General", mostrar_grafico_historico=True,
 
         activas_por_defecto_comparar = {
             "Histórico UAH",
-            "Regresión lineal (anclada al último año)",
+            "Regresión lineal (ajustada al último año)",
             "Crecimiento fijo +1 pp/año",
             "Crecimiento fijo +1.5 pp/año",
             "Crecimiento fijo +2 pp/año",
+            "Proyección manual",
         }
 
         # --- Versión anterior: se mostraban todas las columnas/curvas y las
@@ -669,7 +700,7 @@ if not modo.startswith("General"):
     objetivos_forzados_modo = {}
     for nombre, key in METODOS.items():
         if key == "manual":
-            valores_manual = st.session_state.get("manual_general_valores")
+            valores_manual = st.session_state.get("manual_general_valores_ret3")
             if valores_manual and len(valores_manual) == n_futuro:
                 objetivos_forzados_modo[nombre] = valores_manual[-1]
             continue  # si aún no se ingresó la proyección manual en General, se deja sin forzar
@@ -695,7 +726,7 @@ with st.expander("ℹ️ Descripción de los métodos de simulación disponibles
   todo el histórico en conjunto (mínimos cuadrados) y la extiende hacia
   adelante. Como no está obligada a pasar por el último año, puede haber un
   pequeño salto entre el histórico y el primer año proyectado.
-- **Regresión lineal (anclada al último año):** usa la misma pendiente que la
+- **Regresión lineal (ajustada al último año):** usa la misma pendiente que la
   regresión anterior, pero la proyección arranca exactamente desde el
   último valor real, sin salto.
 - **Crecimiento fijo +1 pp/año**, **+1.5 pp/año** y **+2 pp/año:** en vez
