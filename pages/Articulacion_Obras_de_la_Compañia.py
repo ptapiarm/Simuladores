@@ -1,16 +1,13 @@
 """
 Articulación con Obras de la Compañía — Proyección por regresión
 --------------------------------------------------------------------
-App en Streamlit que proyecta, año a año, 4 datos crudos (sin normalizar,
+App en Streamlit que proyecta, año a año, 3 datos crudos (sin normalizar,
 sin ponderar, sin combinar en un índice):
 
   - Iniciativas:      N° total de iniciativas conjuntas UAH-Obras.
   - Instituciones:    N° de obras/instituciones distintas como contraparte.
   - Participación UAH: N° de estudiantes UAH (pregrado/posgrado) que
                         participaron (prestan el servicio).
-  - Beneficiarios:    N° de personas destinatarias externas que reciben
-                        el servicio (no pide meta, se proyecta solo con
-                        la tendencia real 2024→2025).
 
 Para Iniciativas, Instituciones y Participación UAH, tú defines una META
 para un año futuro; la app ajusta una regresión lineal (mínimos cuadrados)
@@ -187,8 +184,6 @@ with st.expander("ℹ️ Qué significa cada dato"):
 - **Participación UAH** = N° de estudiantes UAH (pregrado/posgrado) que
   participaron — quienes prestan el servicio. 2024: {PARTICIPACION_TOTAL[2024]}.
   2025: {PARTICIPACION_TOTAL[2025]}.
-- **Beneficiarios** = N° de personas destinatarias externas que reciben el
-  servicio. 2024: {BENEFICIARIOS_TOTAL[2024]}. 2025: {BENEFICIARIOS_TOTAL[2025]}.
 - **Profundidad** (referencial) = Iniciativas ÷ Instituciones. 2024:
   {profundidad_valor[2024]:.2f}. 2025: {profundidad_valor[2025]:.2f}.
 
@@ -308,13 +303,12 @@ for year in ANIOS_TOTAL:
         "Iniciativas": series["Iniciativas"][year],
         "Instituciones": series["Instituciones"][year],
         "Participación UAH": series["Participación UAH"][year],
-        "Beneficiarios": series["Beneficiarios"][year],
         "Profundidad (Iniciativas ÷ Instituciones)": series["Profundidad"][year],
     })
 
 datos_calc = pd.DataFrame(filas)
 tabla_mostrar = datos_calc.copy()
-COLS_ENTERAS = ["Iniciativas", "Instituciones", "Participación UAH", "Beneficiarios"]
+COLS_ENTERAS = ["Iniciativas", "Instituciones", "Participación UAH"]
 tabla_mostrar[COLS_ENTERAS] = tabla_mostrar[COLS_ENTERAS].round(0).astype(int)
 tabla_mostrar["Profundidad (Iniciativas ÷ Instituciones)"] = tabla_mostrar[
     "Profundidad (Iniciativas ÷ Instituciones)"
